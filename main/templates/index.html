@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>The Digital Vault</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script>
+        // Inject user context from Flask securely
+        const USER_ROLE = "{{ user.role }}";
+        const USER_EMAIL = "{{ user.email }}";
+        const USER_NAME = "{{ user.name }}";
+    </script>
+    <style>
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .nav-link.active { background: rgba(255, 255, 255, 0.15); color: white; font-weight: 700; }
+        .content-section { display: none; animation: fadeIn 0.4s ease-out; }
+        .content-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .btn-gradient { background: linear-gradient(135deg, #00327d 0%, #0047ab 100%); }
+    </style>
+</head>
+<body class="bg-[#f9f9f9] font-['Inter'] text-[#1a1c1c] overflow-x-hidden">
+
+<aside class="h-screen w-64 fixed left-0 top-0 bg-[#0047AB] flex flex-col py-8 px-4 shadow-2xl z-50">
+    <div class="mb-8 px-2 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-lg">
+            <span class="material-symbols-outlined text-[#0047AB] text-xl" style="font-variation-settings: 'FILL' 1;">security</span>
+        </div>
+        <h2 class="text-white font-bold text-base font-['Manrope'] tracking-tight">Central Repository</h2>
+    </div>
+
+    <div class="px-2 mb-8 flex gap-2">
+        <select id="search-type" class="bg-white/10 border-none rounded-xl text-white text-xs py-2 px-2 focus:ring-0">
+            <option value="name" class="text-black">Name</option>
+            <option value="content" class="text-black">Content</option>
+        </select>
+        <input id="search-input" onkeyup="loadFiles()" class="w-full bg-white/10 border-none rounded-xl py-2 px-3 text-white placeholder-white/40 text-xs focus:ring-2 focus:ring-white/20 transition-all" placeholder="Search..." type="text"/>
+    </div>
+    
+    <nav class="flex-1 space-y-1" id="sidebar-nav">
+<button onclick="showSection('files')" class="nav-link active w-full text-left text-white/70 hover:text-white px-4 py-3 rounded-xl flex items-center gap-3 hover:bg-white/5 transition-all">
+    <span class="material-symbols-outlined text-xl">folder_open</span><span class="text-sm font-medium">All Files</span>
+</button>
+<button onclick="showSection('shared')" class="nav-link w-full text-left text-white/70 hover:text-white px-4 py-3 rounded-xl flex items-center gap-3 hover:bg-white/5 transition-all">
+    <span class="material-symbols-outlined text-xl">group</span><span class="text-sm font-medium">Shared with Me</span>
+</button>
+
+{% if user.role == 'admin' %}
+<button onclick="showSection('admin-users')" class="nav-link w-full text-left text-white/70 hover:text-white px-4 py-3 rounded-xl flex items-center gap-3 hover:bg-white/5 transition-all">
+    <span class="material-symbols-outlined text-xl">manage_accounts</span><span class="text-sm font-medium">Manage Users</span>
+</button>
+{% endif %}
+
+<button onclick="showSection('profile')" class="nav-link w-full text-left text-white/70 hover:text-white px-4 py-3 rounded-xl flex items-center gap-3 hover:bg-white/5 transition-all">
+    <span class="material-symbols-outlined text-xl">person</span><span class="text-sm font-medium">My Profile</span>
+</button>
+    </nav>
+    
+    <div class="mt-auto px-2" id="upload-btn-container">
+        <button onclick="openUploadModal()" class="w-full bg-white text-[#00327d] py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-xl hover:bg-slate-50 active:scale-95 transition-all">
+            <span class="material-symbols-outlined text-lg">add_circle</span> Upload
+        </button>
+    </div>
+</aside>
+
+<header class="fixed top-0 right-0 left-64 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 flex justify-between items-center px-8 py-3 h-16">
+    <h2 id="page-title" class="font-['Manrope'] font-extrabold text-lg text-[#00327d]">All Files</h2>
+    <div class="flex items-center gap-5">
+        <div class="text-right border-r border-slate-200 pr-5">
+            <p class="text-xs font-bold text-[#1a1c1c]">{{ user.name }}</p>
+            <p class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{{ user.role }}</p>
+        </div>
+        <a href="/logout" class="group flex items-center gap-1.5 text-xs font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-all duration-200">
+            <span class="material-symbols-outlined text-[18px] transition-transform group-hover:-translate-x-0.5">logout</span> Logout
+        </a>
+    </div>
+</header>
+
+<main class="pl-64 pt-16 min-h-screen">
+    {% if user.role == 'admin' %}
+<section id="admin-users" class="content-section">
+    <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 max-w-2xl">
+        <h3 class="font-bold text-lg mb-6 text-[#00327d]">System User Registration</h3>
+        <form onsubmit="addUser(event)" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <input type="text" id="new-name" placeholder="Full Name" class="rounded-xl border-slate-200 text-sm" required>
+                <input type="email" id="new-email" placeholder="Email Address" class="rounded-xl border-slate-200 text-sm" required>
+            </div>
+            <select id="new-role" onchange="toggleAdminUserFields()" class="w-full rounded-xl border-slate-200 text-sm">
+                <option value="student">Student</option>
+                <option value="staff">Staff</option>
+            </select>
+            <div id="admin-student-fields" class="grid grid-cols-2 gap-4">
+                <input type="text" id="new-year" placeholder="Year (1-4)" class="rounded-xl border-slate-200 text-sm">
+                <input type="text" id="new-class" placeholder="Class (A/B/C)" class="rounded-xl border-slate-200 text-sm">
+            </div>
+            <button type="submit" class="btn-gradient w-full py-3 text-white font-bold rounded-xl shadow-lg">Register User (Default Pwd: 1234)</button>
+        </form>
+    </div>
+</section>
+{% endif %}
+    
+    <div class="p-8 max-w-[1600px] mx-auto">
+        <section id="files" class="content-section active">
+            <div id="file-grid-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+        </section>
+
+        <section id="shared" class="content-section">
+            <div class="mb-4 border-b border-slate-200 pb-2">
+                <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest">Files Shared With You</h3>
+            </div>
+            <div id="shared-grid-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                </div>
+        </section>
+
+        <section id="profile" class="content-section">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-50 flex flex-col items-center text-center">
+                    <div class="w-20 h-20 bg-blue-100 text-[#00327d] rounded-full flex items-center justify-center text-3xl font-bold mb-4">
+                        {{ user.name[0] }}
+                    </div>
+                    <h4 class="text-xl font-extrabold tracking-tight">{{ user.name }}</h4>
+                    <p class="text-[#00327d] font-bold text-xs capitalize">{{ user.role }}</p>
+                    <p class="text-[11px] text-slate-500 font-medium mt-1">{{ user.email }}</p>
+                </div>
+                <div class="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-50 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <h4 class="font-['Manrope'] font-bold text-sm uppercase tracking-wider">My Uploaded Files</h4>
+                    </div>
+                    <div id="profile-uploads-list" class="divide-y divide-slate-50"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<div id="summary-sidebar" class="fixed right-0 top-16 bottom-0 w-80 bg-white/90 backdrop-blur-xl border-l border-slate-200 shadow-2xl transform translate-x-full transition-transform duration-300 z-40 flex flex-col">
+    <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-white/50">
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[#00327d]">auto_awesome</span>
+            <h3 class="font-headline font-bold text-[#00327d] text-sm uppercase tracking-wider">AI Summary</h3>
+        </div>
+        <button onclick="closeSummary()" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors">
+            <span class="material-symbols-outlined text-sm">close</span>
+        </button>
+    </div>
+    
+    <div class="p-6 flex-1 overflow-y-auto">
+        <h4 id="summary-title" class="font-bold text-sm text-[#1a1c1c] mb-4 break-words">Loading...</h4>
+        
+        <div id="summary-loader" class="hidden flex flex-col items-center justify-center py-10 opacity-50">
+            <span class="material-symbols-outlined animate-spin text-3xl text-[#00327d] mb-4">progress_activity</span>
+            <p class="text-xs font-bold text-[#00327d] animate-pulse">Analyzing document...</p>
+        </div>
+        
+        <div id="summary-content" class="text-sm text-slate-600 leading-relaxed">
+            </div>
+    </div>
+</div>
+
+<div id="upload-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-lg rounded-xl shadow-2xl p-8">
+        <h2 class="font-['Manrope'] text-xl font-extrabold mb-6">Upload Asset</h2>
+        <form id="upload-form" class="space-y-6" onsubmit="processUpload(event)">
+            <div>
+                <input type="file" id="file-input" required class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+            </div>
+
+            <div>
+                <label class="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-3">Visibility</label>
+                <div class="flex gap-4">
+                    <label class="flex-1 cursor-pointer">
+                        <input class="sr-only peer" name="visibility" type="radio" value="private" onchange="togglePermissions()"/>
+                        <div class="p-3 border rounded-lg flex items-center gap-2 peer-checked:border-[#00327d] peer-checked:bg-blue-50 transition-all">
+                            <span class="text-sm font-semibold">Private</span>
+                        </div>
+                    </label>
+                    <label class="flex-1 cursor-pointer">
+                        <input checked class="sr-only peer" name="visibility" type="radio" value="public" onchange="togglePermissions()"/>
+                        <div class="p-3 border rounded-lg flex items-center gap-2 peer-checked:border-[#00327d] peer-checked:bg-blue-50 transition-all">
+                            <span class="text-sm font-semibold">Public</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div id="audience-section">
+                <label class="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">Who can see this?</label>
+                <select id="audience-select" name="audience" class="w-full bg-slate-50 border-none rounded-lg text-sm p-3 focus:ring-2 focus:ring-[#00327d]/20" onchange="togglePermissions()">
+                    <option value="all">All Users</option>
+                    <option value="specific">Specific Group / Class</option>
+                </select>
+            </div>
+
+            <div id="student-emails-section" class="hidden p-4 bg-blue-50 rounded-xl">
+                <label class="text-xs font-bold text-[#00327d] uppercase block mb-2">Target Email IDs</label>
+                <input type="text" name="target_emails" id="target_emails" placeholder="e.g., john@ssn.edu.in" class="w-full rounded-lg border-none text-xs p-2.5 shadow-sm">
+            </div>
+
+            <div id="staff-class-section" class="hidden p-4 bg-blue-50 rounded-xl">
+                <label class="text-xs font-bold text-[#00327d] uppercase block mb-2">Target Year & Class</label>
+                <div class="flex gap-3">
+                    <select name="target_year" id="target_year" class="flex-1 rounded-lg border-none text-xs p-2.5 shadow-sm">
+                        <option value="" disabled selected>Select Year</option>
+                        <option value="1">1st Year</option>
+                        <option value="2">2nd Year</option>
+                        <option value="3">3rd Year</option>
+                        <option value="4">4th Year</option>
+                    </select>
+                    <select name="target_class" id="target_class" class="flex-1 rounded-lg border-none text-xs p-2.5 shadow-sm">
+                        <option value="" disabled selected>Select Class</option>
+                        <option value="A">Class A</option>
+                        <option value="B">Class B</option>
+                        <option value="C">Class C</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-6">
+                <button type="button" onclick="closeUploadModal()" class="px-6 py-2.5 text-sm font-semibold rounded-lg hover:bg-slate-100">Cancel</button>
+                <button type="submit" class="btn-gradient px-8 py-2.5 text-sm font-bold text-white rounded-lg shadow-lg">Upload</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="version-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <h3 id="modal-filename" class="font-bold text-sm truncate max-w-[250px]">Versions</h3>
+            <button onclick="document.getElementById('version-modal').classList.replace('flex', 'hidden')" class="material-symbols-outlined">close</button>
+        </div>
+        <div id="modal-version-list" class="p-4 space-y-2 max-h-[350px] overflow-y-auto"></div>
+    </div>
+</div>
+
+<script>
+    // Hide upload for admins
+    if (USER_ROLE === 'admin') document.getElementById('upload-btn-container').style.display = 'none';
+
+    function showSection(sectionId) {
+    document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+    document.getElementById(sectionId).classList.add('active');
+    
+    document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
+    const activeNav = document.querySelector(`button[onclick="showSection('${sectionId}')"]`);
+    if(activeNav) activeNav.classList.add('active');
+
+    // Update titles map to include admin-users
+    const titles = { 
+        'files': 'All Files', 
+        'shared': 'Shared With Me', 
+        'profile': 'My Profile',
+        'admin-users': 'User Management' 
+    };
+    document.getElementById('page-title').innerText = titles[sectionId] || 'Digital Vault';
+    
+    if (sectionId === 'files' || sectionId === 'shared') loadFiles();
+    if (sectionId === 'profile') loadProfile();
+    closeSummary();
+}
+
+    // Modal & Form Logic
+    function openUploadModal() {
+        document.getElementById('upload-modal').classList.replace('hidden', 'flex');
+        togglePermissions();
+    }
+    
+    function closeUploadModal() {
+        document.getElementById('upload-modal').classList.replace('flex', 'hidden');
+        document.getElementById('upload-form').reset();
+    }
+
+    function togglePermissions() {
+        const visibility = document.querySelector('input[name="visibility"]:checked').value;
+        const audience = document.getElementById('audience-select').value;
+        const audSec = document.getElementById('audience-section');
+        const stuSec = document.getElementById('student-emails-section');
+        const staffSec = document.getElementById('staff-class-section');
+
+        if (visibility === 'private') {
+            audSec.classList.add('hidden'); stuSec.classList.add('hidden'); staffSec.classList.add('hidden'); return;
+        }
+        
+        audSec.classList.remove('hidden');
+        
+        if (audience === 'specific') {
+            if (USER_ROLE === 'student') { 
+                stuSec.classList.remove('hidden'); 
+                staffSec.classList.add('hidden'); 
+            } else if (USER_ROLE === 'staff') { 
+                staffSec.classList.remove('hidden'); 
+                stuSec.classList.add('hidden'); 
+            }
+        } else {
+            stuSec.classList.add('hidden'); 
+            staffSec.classList.add('hidden');
+        }
+    }
+
+    // Backend Calls
+    async function processUpload(e) {
+        e.preventDefault();
+        const formData = new FormData(document.getElementById('upload-form'));
+        formData.append('file', document.getElementById('file-input').files[0]);
+
+        await fetch('/api/upload', { method: 'POST', body: formData });
+        closeUploadModal();
+        loadFiles();
+    }
+
+    async function loadFiles() {
+        const q = document.getElementById('search-input').value;
+        const type = document.getElementById('search-type').value;
+        const res = await fetch(`/api/files?q=${q}&type=${type}`);
+        const files = await res.json();
+        
+        document.getElementById('file-grid-container').innerHTML = generateGridHtml(files);
+        
+        const sharedFiles = files.filter(f => f.uploader !== USER_EMAIL);
+        const sharedContainer = document.getElementById('shared-grid-container');
+        
+        if (sharedContainer) {
+            if (sharedFiles.length > 0) {
+                sharedContainer.innerHTML = generateGridHtml(sharedFiles);
+            } else {
+                sharedContainer.innerHTML = '<div class="col-span-full py-12 text-center text-slate-400 font-medium text-sm border-2 border-dashed border-slate-200 rounded-2xl">No files have been shared with you yet.</div>';
+            }
+        }
+    }
+
+    function generateGridHtml(fileArray) {
+    if(fileArray.length === 0) return '<p class="col-span-full text-center text-slate-400 py-10">No files found.</p>';
+    
+    return fileArray.map(f => {
+        // Prepare Admin Buttons for the overlay
+        let adminButtons = '';
+        if (USER_ROLE === 'admin') {
+            const approveBtn = (f.status === 'pending' && f.visibility !== 'private') ? 
+                `<button onclick="approveFile(event, ${f.version_id})" class="w-full bg-green-500 text-white text-[10px] font-bold py-2 rounded-lg hover:bg-green-600 transition-all">Approve File</button>` : '';
+            
+            adminButtons = `
+                ${approveBtn}
+                <button onclick="deleteFile(event, ${f.id})" class="w-full bg-red-500 text-white text-[10px] font-bold py-2 rounded-lg hover:bg-red-600 transition-all">Delete Asset</button>
+            `;
+        }
+
+        const safeName = f.name.replace(/'/g, "\\'");
+
+        return `
+        <div class="relative bg-white p-4 rounded-2xl border hover:border-[#00327d]/20 transition-all group overflow-hidden shadow-sm h-full flex flex-col">
+            <span class="material-symbols-outlined text-[#00327d] text-3xl mb-2">description</span>
+            <h4 class="font-bold text-xs truncate">${f.name}</h4>
+            <p class="text-[9px] text-slate-400 mt-1">${f.uploader}</p>
+            <div class="mt-auto pt-2 flex items-center justify-between">
+                <p class="text-[10px] text-slate-500 font-bold">v${f.version}</p>
+                <span class="text-[8px] px-2 py-0.5 rounded-full font-bold ${f.status === 'live' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}">
+                    ${f.status.toUpperCase()}
+                </span>
+            </div>
+
+            <div class="absolute inset-0 bg-white/95 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-200 flex flex-col items-center justify-center gap-2 p-4 z-10">
+                <button onclick="triggerDownload(${f.id}, '${safeName}')" class="w-full bg-[#00327d] text-white text-[10px] font-bold py-2 rounded-lg text-center shadow-md hover:bg-[#0047AB] flex items-center justify-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">download</span> Download
+                </button>
+                
+                <button onclick="summarizeFile(${f.id}, '${safeName}')" class="w-full bg-blue-50 text-[#00327d] text-[10px] font-bold py-2 rounded-lg shadow-sm hover:bg-blue-100 flex items-center justify-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">auto_awesome</span> AI Summary
+                </button>
+
+                ${adminButtons}
+            </div>
+        </div>`;
+    }).join('');
+}
+    // AI Summary Functions
+    async function summarizeFile(assetId, filename) {
+        const sidebar = document.getElementById('summary-sidebar');
+        const loader = document.getElementById('summary-loader');
+        const content = document.getElementById('summary-content');
+        const title = document.getElementById('summary-title');
+        
+        // Open sidebar & show loader
+        sidebar.classList.remove('translate-x-full');
+        title.innerText = filename;
+        content.innerHTML = '';
+        loader.classList.remove('hidden');
+
+        try {
+            const response = await fetch(`/api/summarize/${assetId}`);
+            const data = await response.json();
+            
+            loader.classList.add('hidden');
+            content.innerHTML = data.summary;
+            
+        } catch (error) {
+            loader.classList.add('hidden');
+            content.innerHTML = '<p class="text-red-500 font-medium">Failed to generate summary. Please try again later.</p>';
+        }
+    }
+
+    function closeSummary() {
+        document.getElementById('summary-sidebar').classList.add('translate-x-full');
+    }
+
+    async function approveFile(event, versionId) {
+        event.stopPropagation();
+        await fetch(`/api/admin/approve/${versionId}`, { method: 'POST' });
+        loadFiles(); 
+    }
+
+    async function loadProfile() {
+        const res = await fetch('/api/profile/files');
+        const data = await res.json();
+        window.profileData = data; 
+        
+        if(data.length === 0) {
+            document.getElementById('profile-uploads-list').innerHTML = '<p class="p-6 text-center text-sm text-slate-400">You haven\'t uploaded any files yet.</p>';
+            return;
+        }
+
+        document.getElementById('profile-uploads-list').innerHTML = data.map(asset => {
+            const activeV = asset.versions.find(v => v.is_active) || asset.versions[0];
+            return `
+            <div onclick="openVersionModal(${asset.id})" class="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer border-b border-slate-50">
+                <div>
+                    <h4 class="text-sm font-bold text-[#1a1c1c]">${asset.name}</h4>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Live Version: ${activeV.version_number} • Status: <span class="capitalize ${activeV.status === 'pending' ? 'text-orange-500' : 'text-green-600'}">${activeV.status}</span></p>
+                </div>
+                <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-[#00327d] hover:text-white transition-colors">
+                    <span class="material-symbols-outlined text-sm">history</span>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function openVersionModal(assetId) {
+        const asset = window.profileData.find(a => a.id === assetId);
+        document.getElementById('modal-filename').innerText = asset.name;
+        document.getElementById('modal-version-list').innerHTML = asset.versions.map(v => `
+            <div class="p-4 border rounded-xl flex items-center justify-between mb-2 ${v.is_active ? 'border-green-500 bg-green-50/50' : 'border-slate-100 bg-white'}">
+                <div>
+                    <p class="text-xs font-bold ${v.is_active ? 'text-green-700' : 'text-slate-700'}">Version ${v.version_number} ${v.status === 'pending' ? '<span class="text-orange-500 ml-1">(Pending Review)</span>' : ''}</p>
+                    <p class="text-[10px] text-slate-500 mt-1">${v.date}</p>
+                </div>
+                ${v.is_active ? '<span class="text-[9px] font-black text-green-700 bg-green-100 px-3 py-1 rounded-full uppercase tracking-wider">Live</span>' : 
+                `<button onclick="setActive(${asset.id}, ${v.id})" class="text-[9px] font-bold text-white bg-[#00327d] hover:bg-[#0047AB] px-3 py-1 rounded-full uppercase transition-colors">Set Live</button>`}
+            </div>
+        `).join('');
+        document.getElementById('version-modal').classList.replace('hidden', 'flex');
+    }
+
+    async function setActive(assetId, versionId) {
+        await fetch('/api/versions/set_active', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ asset_id: assetId, version_id: versionId })
+        });
+        loadProfile();
+        openVersionModal(assetId); 
+    }
+    // Admin: Delete File
+async function deleteFile(event, assetId) {
+    event.stopPropagation();
+    if(!confirm("Are you sure? This will remove all versions permanently.")) return;
+    
+    const response = await fetch(`/api/admin/delete/${assetId}`, { method: 'DELETE' });
+    if(response.ok) {
+        loadFiles(); 
+    } else {
+        alert("Failed to delete file.");
+    }
+}
+
+// Admin: Add User
+async function addUser(e) {
+    e.preventDefault();
+    const data = {
+        name: document.getElementById('new-name').value,
+        email: document.getElementById('new-email').value,
+        role: document.getElementById('new-role').value,
+        year: document.getElementById('new-year').value || null,
+        stu_class: document.getElementById('new-class').value || null
+    };
+    
+    const response = await fetch('/api/admin/add_user', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+    
+    if(response.ok) {
+        alert('User Created Successfully!');
+        e.target.reset();
+        toggleAdminUserFields();
+    } else {
+        const err = await response.json();
+        alert("Error: " + err.error);
+    }
+}
+
+// Admin: Toggle student-specific fields in form
+function toggleAdminUserFields() {
+    const role = document.getElementById('new-role').value;
+    const studentFields = document.getElementById('admin-student-fields');
+    studentFields.style.display = (role === 'student' ? 'grid' : 'none');
+}
+
+
+    // Initialize application view
+    loadFiles();
+</script>
+</body>
+</html>
