@@ -74,6 +74,8 @@ User Request
              └── Teacher-Student Data Management
 
 
+```
+
 ## Setup and Run Instructions
 
 Follow the steps below to set up and run the application:
